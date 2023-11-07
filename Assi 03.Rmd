@@ -1,0 +1,196 @@
+
+
+---
+title: "Assignment 03-QMM"
+author: "Chathurani Ekanayake"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Loading necessary packages 
+```{r}
+library(Matrix)
+library(tinytex)
+library(lpSolve)
+library(knitr)
+```
+# Data  
+All the necessary data in the question can summarize in the table as follow. 
+
+```{r}
+table<-matrix(c(20,14,25,400,100,
+              12,15,14,300,125,
+              10,12,15,500,150,
+              80,90,70,"_","_"),ncol=5,nrow=4,byrow = TRUE)
+colnames(table)<- c("Warehouse 1","Warehouse 2","Warehouse 3", "Production cost","Production capacity")
+rownames(table) <- c("Plant A", "Plant B", "Plant C", "Monthly Demand")
+table<-as.table(table)
+```
+
+Install "KableExtra"pacakge
+```{r}
+# install.packages("kableExtra")
+library(kableExtra)
+```
+
+```{r}
+table %>%
+  kable() %>%
+  kable_classic() %>%
+  column_spec(2,border_left = TRUE) %>%
+  column_spec(6,border_left = TRUE) %>%
+  row_spec(3,extra_css = "border-bottom:solid;")
+```
+As per the above data table, first we have to calculate the cost of each warehouse by adding each warehouse unit shipping cost with the production cost. 
+
+As well as ,due to in the above table supply > demand we have to make a balanced table first((total of supply = 375) - (total of demand = 240)= 135). Therefore we have created a dummy column and add 135 to make demand= supply.
+
+```{r}
+table2 <- matrix(c(420,414,425,0,100,
+                   312,315,314,0,125,
+                   510,512,515,0,150,
+                   80,90,70,135,375), ncol=5,nrow = 4, byrow = TRUE)
+
+colnames(table2)<- c("Warehouse 1","Warehouse 2","Warehouse 3", "Dummy","Production capacity")
+rownames(table2)<- c("Plant A", "Plant B", "Plant C", "Monthly Demand")
+table2 <- as.table(table2)
+
+
+table2 %>%
+  kable() %>%
+  kable_classic() %>%
+  column_spec(2,border_left = TRUE) %>%
+  column_spec(6,border_left = TRUE) %>%
+  row_spec(3,extra_css = "border-bottom:solid;")
+```
+
+
+
+# 01. Formulate and solve this transportation problem using R
+
+The Objective Function is to Minimize the Transportation cost
+
+$$ Min \hspace{.3cm} TC = 420X_{11} + 414X_{12} + 425X_{13} + 312X_{21} + 315X_{22} + 314X_{23} + 510X_{31} +512X_{32} +515X_{33} $$
+
+Subject to the following constraints. 
+
+Supply Constraints 
+
+$$ X_{11}+ X_{12}+ X_{13}  \le  100 $$
+$$ X_{21}+ X_{22}+ X_{23} \le 125 $$
+$$ X_{31}+ X_{32}+ X_{33} + \le 150 $$
+
+Demand Constraints 
+
+$$ X_{11}+ X_{21}+ X_{31} \ge 80 $$
+$$ X_{12}+ X_{22}+ X_{32} \ge 90 $$
+$$ X_{13}+ X_{23}+ X_{33} \ge 70 $$
+$$ X_{14}+ X_{24}+ X_{34} \ge 135 $$
+
+
+Non-negativity of the decision variables:
+
+$$ xij ≥ 0 \hspace{.3cm} where \hspace{.3cm} i = 1, 2, 3 \hspace{.3cm} and \hspace{.3cm}j = 1, 2, 3,4 $$ 
+
+
+```{r}
+costs <- matrix(c(420,414,425,0,
+                  312,315,314,0,
+                  510,512,515,0), nrow = 3,byrow=TRUE)
+costs
+```
+```{r}
+row.signs <-rep("<=",3)
+row.rhs <- c(100,125,150)
+```
+
+```{r}
+col.signs <- rep(">=",4)
+col.rhs <- c(80,90,70,135)
+```
+
+Run the model 
+```{r}
+lptrans <- lp.transport(costs, "min",row.signs, row.rhs,col.signs, col.rhs)
+```
+
+```{r}
+lptrans$solution
+```
+As per the above chart,to minimize the total transportation cost, 
+10 units should be shipped from Plant A to Warehouse 1.
+90 units should be shipped from Plant A to Warehouse 2.
+55 units should be shipped from Plant B to Warehouse 1.
+70 units should be shipped from Plant B to Warehouse 3.
+15 units should be shipped from Plant C to Warehouse 1.
+(135 is just a dummy variable which we created to balance the table, So there is no value in the dummy variable)
+
+According to the above solution we can calculate the transportation cost as follow
+```{r}
+(10*420)+ (90*414)+ (55*312)+ (70*314)+(15*510)
+```
+
+Further we can test this through the objective function
+```{r}
+lptrans$objval
+```
+
+According to the above, this solution has a total minimized transportation cost of 88,250.
+
+
+# 02. Formulate the dual of this transportation problem
+
+In the dual, the right hand side values of the above constraints becomes the coefficients of the objective function of the dual. Through the dual objective function we are considering what gets for the supplier. Therefore the RHS values of demand constrains are positive for the suppliers and RHS valued of supply constrains become negatives, due to for the supply they have to bear some cost.  
+
+The objective function of the dual is,
+
+$$ Max \hspace{.3cm} Z = 80v_1+ 90v_2+ 70v_3+ 135v_4-100u_1+ 125u_2 + 100u_3 $$
+Constraints:
+
+$$ v_j - u_i \ge c_{ij}$$
+
+The plant A transport goods to four possible destinations are, 
+
+$$ v_1 -u_1 \le c_{11} = 420$$
+$$ v_2 - u_1 \le c_{12} = 414 $$
+$$ v_3 - u_1 \le c_{13} = 425 $$
+$$ v_4 - u_1 \le  c_{14} = 0$$
+The plant B transport goods to four possible destinations are, 
+$$ v_1 -u_2 \le c_{11} = 312$$
+$$ v_2 -u_2 \le c_{12} = 315$$
+$$ v_3 - u_2 \le c_{13} = 314 $$
+$$ v_4 - u_2 \le  c_{14} = 0$$
+The plant C transport goods to four possible destinations are, 
+$$ v_1 -u_3 \le c_{11} = 510$$
+$$ v_2 -u_3 \le c_{12} = 512 $$
+$$ v_3 - u_3 \le c_{13} = 515 $$
+$$ v_3 - u_3 \le c_{14} = 0 $$
+Non negativity constraints:
+
+$$ Where \hspace{.3cm} all \hspace{.3cm}v_j \ge 0 \hspace{.3cm}for \hspace{.3cm}j = 1,2,3,4 \hspace{.3cm}and \hspace{.3cm} u_i \ge 0 \hspace{.3cm}for \hspace{.3cm}i = 1,2,3$$
+
+# 03.Make an economic interpretation of the dual
+
+Economic Interpretation of the Dual
+
+1. Marginal Revenue (MR) = Marginal Cost (MC) rule 
+
+According to the above answer our dual constraint is \(v_j - u_i \ge c_{ij}\). We can re write this as \(v_j  \ge c_{ij} + u_i\). For instance, \(v_1 -u_1 \le = 420\) can rewrite as, \(v_1  \le = 420  + u_1\). Here the right side is  per unit cost of shipping and manufacturing good. This is called MC (marginal cost) . The left side is per unit revenue received by selling one unit of the product, so this called MR (marginal revenue). Supplier 1 keeps supplying on to the plant A, as long as  \(v_1  \ge  = 420  + u_1\) and \(MR \ge MC\). On the other hand, supplier 1 reduces supplying if \(v_1  \le  = 420\)  + u_1 \(which is $$MR \le MC\). When \(v_1  = 420  + u_1\), \(MR=MC\) and the producer neither increases nor decreases the supply. That point we identify as the equilibrium for the profit maximization. Although the transportation cost minimization problem is equivalent to profit maximization in the dual and which ends up with \(MR=MC\).
+
+2. Hiring or not hiring shipping company for shipping goods
+
+if , \(v_j - u_i \ge c_{ij}\)  it indicates that the supplier directly supplies goods from the source to the destination. In this case, the supplier can meet the demand by producing and transporting goods themselves. 
+However,if \(v_j - u_i \le c_{ij}\) it suggests that the supplier has found another shipping company capable of transporting goods from the source to the destination while satisfying this condition. In such a scenario, the supplier opts to hire the shipping company instead of handling the transportation themselves.
+
+In summary, when \(v_j - u_i \ge c_{ij}\)the supplier takes on the role of both the producer and shipper. But when \(v_j - u_i \le c_{ij}\) the producer (supplier) focuses solely on producing goods and collaborates with a shipping company to handle the transportation. This decision is based on the comparative cost-effectiveness of producing and transporting in-house versus outsourcing transportation.
+
+
+
+
